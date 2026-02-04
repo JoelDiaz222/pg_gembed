@@ -33,7 +33,7 @@ CREATE OR REPLACE FUNCTION embed_texts_with_ids(
 )
     RETURNS TABLE
             (
-                sentence_id integer,
+                id          integer,
                 embedding   vector
             )
 AS
@@ -77,8 +77,8 @@ CREATE OR REPLACE FUNCTION embed_images_with_ids(
 )
     RETURNS TABLE
             (
-                image_id  integer,
-                embedding vector
+                id          integer,
+                embedding   vector
             )
 AS
 'MODULE_PATHNAME',

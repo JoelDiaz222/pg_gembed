@@ -443,9 +443,9 @@ process_embedding_job(EmbeddingJob *job)
     InputData input_data = {
         .input_type = INPUT_TYPE_TEXT,
         .binary_data = NULL,
-        .n_binary = 0,
+        .n_binaries = 0,
         .text_data = texts,
-        .n_text = n_rows
+        .n_texts = n_rows
     };
 
     err = generate_embeddings(embedder_id, model_id, &input_data, &batch);

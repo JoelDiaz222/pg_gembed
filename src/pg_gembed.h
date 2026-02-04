@@ -34,9 +34,9 @@ typedef struct
 {
     int input_type;                    /* INPUT_TYPE_* constant */
     const ByteSlice *binary_data;      /* For images, audio, etc. */
-    size_t n_binary;                   /* Number of binary items */
+    size_t n_binaries;                   /* Number of binary items */
     const StringSlice *text_data;      /* For text inputs */
-    size_t n_text;                     /* Number of text items */
+    size_t n_texts;                     /* Number of text items */
 } InputData;
 
 /* Validates the embedder name and returns its ID (-1 if non-existent) */

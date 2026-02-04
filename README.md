@@ -63,7 +63,7 @@ Returns an array of `vector` types compatible with pgvector.
 ```sql
 -- Generate and insert embeddings with associated IDs
 INSERT INTO documents (id, embedding)
-SELECT sentence_id, embedding
+SELECT id, embedding
 FROM embed_texts_with_ids(
     'fastembed',
     'Qdrant/all-MiniLM-L6-v2-onnx',
@@ -111,7 +111,8 @@ ORDER BY distance ASC;
 
 ```sql
 -- Create a table with embeddings
-CREATE TABLE articles (
+CREATE TABLE articles
+(
     id        SERIAL PRIMARY KEY,
     title     TEXT,
     content   TEXT,
