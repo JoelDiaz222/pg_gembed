@@ -34,6 +34,40 @@ validate_embedder_and_model(text *embedder_text, text *model_text, int input_typ
         elog(ERROR, "Model not allowed: %s", model_str);
 }
 
+/* Context for Set-Returning Functions (SRFs) */
+typedef struct
+{
+    int *ids;
+    Datum *vectors;
+    void *block;
+    int nitems;
+    int current;
+} EmbeddingSRFContext;
+
+/*
+ * Populates a block of Vectors and an array of Datums from an EmbeddingBatch.
+ */
+static void
+populate_vector_datums(const EmbeddingBatch *batch, void **out_block, Datum **out_vectors)
+{
+    size_t vec_size = VECTOR_SIZE(batch->dim);
+    char *block = palloc(batch->n_vectors * vec_size);
+    Datum *vectors = palloc(sizeof(Datum) * batch->n_vectors);
+
+    for (size_t i = 0; i < batch->n_vectors; i++)
+    {
+        Vector *v = (Vector *)(block + i * vec_size);
+        SET_VARSIZE(v, vec_size);
+        v->dim = batch->dim;
+        v->unused = 0;
+        memcpy(v->x, batch->data + i * batch->dim, sizeof(float) * batch->dim);
+        vectors[i] = PointerGetDatum(v);
+    }
+
+    *out_block = block;
+    *out_vectors = vectors;
+}
+
 /*
  * Convert a text Datum to a StringSlice
  */
@@ -129,6 +163,52 @@ make_vector_from_batch(const EmbeddingBatch *batch, size_t index)
     return v;
 }
 
+/*
+ * Create an ArrayType from an EmbeddingBatch.
+ * Handles temporary allocation and cleanup of the vector block and Datum array.
+ */
+static ArrayType *
+construct_vector_array(const EmbeddingBatch *batch)
+{
+    void *block;
+    Datum *vectors;
+
+    populate_vector_datums(batch, &block, &vectors);
+
+    ArrayType *result = construct_array(vectors, batch->n_vectors,
+                                        TypenameGetTypid("vector"), -1, false, 'd');
+
+    pfree(block);
+    pfree(vectors);
+    return result;
+}
+
+/*
+ * Common per-call logic for SRFs returning (id, embedding).
+ */
+static Datum
+srf_return_next_embedding(FuncCallContext *funcctx, EmbeddingSRFContext *fctx, FunctionCallInfo fcinfo)
+{
+    if (fctx->current < fctx->nitems)
+    {
+        Datum values[2];
+        bool nulls[2] = {false, false};
+        HeapTuple tuple;
+
+        values[0] = Int32GetDatum(fctx->ids[fctx->current]);
+        values[1] = fctx->vectors[fctx->current];
+
+        tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
+        fctx->current++;
+
+        SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(tuple));
+    }
+    else
+    {
+        SRF_RETURN_DONE(funcctx);
+    }
+}
+
 /* -------------------------------------------------------------------------
  * Text Embedding Functions
  * -------------------------------------------------------------------------
@@ -199,20 +279,8 @@ embed_texts(PG_FUNCTION_ARGS)
     embed(embedder_id, model_id, &input_data, &batch);
     pfree(c_inputs);
 
-    Datum *vectors = palloc(sizeof(Datum) * batch.n_vectors);
-    for (size_t i = 0; i < batch.n_vectors; i++)
-    {
-        Vector *v = make_vector_from_batch(&batch, i);
-        vectors[i] = PointerGetDatum(v);
-    }
-
-    ArrayType *result = construct_array(vectors, batch.n_vectors,
-                             TypenameGetTypid("vector"), -1, false, 'd');
-
+    ArrayType *result = construct_vector_array(&batch);
     free_embedding_batch(&batch);
-    for (size_t i = 0; i < batch.n_vectors; i++)
-        pfree(DatumGetPointer(vectors[i]));
-    pfree(vectors);
 
     PG_RETURN_ARRAYTYPE_P(result);
 }
@@ -232,13 +300,6 @@ embed_texts_with_ids(PG_FUNCTION_ARGS)
     int n_ids, n_texts;
 
     FuncCallContext *funcctx;
-    typedef struct
-    {
-        int *ids;
-        Vector **vectors;
-        int nitems;
-        int current;
-    } user_fctx;
 
     if (SRF_IS_FIRSTCALL())
     {
@@ -279,15 +340,14 @@ embed_texts_with_ids(PG_FUNCTION_ARGS)
         embed(embedder_id, model_id, &input_data, &batch);
         pfree(c_inputs);
 
-        Vector **vectors = palloc(sizeof(Vector *) * batch.n_vectors);
-        for (size_t i = 0; i < batch.n_vectors; i++)
-        {
-            vectors[i] = make_vector_from_batch(&batch, i);
-        }
+        Datum *vectors;
+        void *block;
+        populate_vector_datums(&batch, &block, &vectors);
 
-        user_fctx *fctx = palloc(sizeof(user_fctx));
+        EmbeddingSRFContext *fctx = palloc(sizeof(EmbeddingSRFContext));
         fctx->ids = c_ids;
         fctx->vectors = vectors;
+        fctx->block = block;
         fctx->nitems = batch.n_vectors;
         fctx->current = 0;
 
@@ -303,26 +363,7 @@ embed_texts_with_ids(PG_FUNCTION_ARGS)
     }
 
     funcctx = SRF_PERCALL_SETUP();
-    user_fctx *fctx = (user_fctx *)funcctx->user_fctx;
-
-    if (fctx->current < fctx->nitems)
-    {
-        Datum values[2];
-        bool nulls[2] = {false, false};
-        HeapTuple tuple;
-
-        values[0] = Int32GetDatum(fctx->ids[fctx->current]);
-        values[1] = PointerGetDatum(fctx->vectors[fctx->current]);
-
-        tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
-        fctx->current++;
-
-        SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(tuple));
-    }
-    else
-    {
-        SRF_RETURN_DONE(funcctx);
-    }
+    return srf_return_next_embedding(funcctx, (EmbeddingSRFContext *)funcctx->user_fctx, fcinfo);
 }
 
 /* -------------------------------------------------------------------------
@@ -395,20 +436,8 @@ embed_images(PG_FUNCTION_ARGS)
     embed(embedder_id, model_id, &input_data, &batch);
     pfree(c_inputs);
 
-    Datum *vectors = palloc(sizeof(Datum) * batch.n_vectors);
-    for (size_t i = 0; i < batch.n_vectors; i++)
-    {
-        Vector *v = make_vector_from_batch(&batch, i);
-        vectors[i] = PointerGetDatum(v);
-    }
-
-    ArrayType *result = construct_array(vectors, batch.n_vectors,
-                             TypenameGetTypid("vector"), -1, false, 'd');
-
+    ArrayType *result = construct_vector_array(&batch);
     free_embedding_batch(&batch);
-    for (size_t i = 0; i < batch.n_vectors; i++)
-        pfree(DatumGetPointer(vectors[i]));
-    pfree(vectors);
 
     PG_RETURN_ARRAYTYPE_P(result);
 }
@@ -428,13 +457,6 @@ embed_images_with_ids(PG_FUNCTION_ARGS)
     int n_ids, n_images;
 
     FuncCallContext *funcctx;
-    typedef struct
-    {
-        int *ids;
-        Vector **vectors;
-        int nitems;
-        int current;
-    } user_fctx;
 
     if (SRF_IS_FIRSTCALL())
     {
@@ -475,15 +497,14 @@ embed_images_with_ids(PG_FUNCTION_ARGS)
         embed(embedder_id, model_id, &input_data, &batch);
         pfree(c_inputs);
 
-        Vector **vectors = palloc(sizeof(Vector *) * batch.n_vectors);
-        for (size_t i = 0; i < batch.n_vectors; i++)
-        {
-            vectors[i] = make_vector_from_batch(&batch, i);
-        }
+        Datum *vectors;
+        void *block;
+        populate_vector_datums(&batch, &block, &vectors);
 
-        user_fctx *fctx = palloc(sizeof(user_fctx));
+        EmbeddingSRFContext *fctx = palloc(sizeof(EmbeddingSRFContext));
         fctx->ids = c_ids;
         fctx->vectors = vectors;
+        fctx->block = block;
         fctx->nitems = batch.n_vectors;
         fctx->current = 0;
 
@@ -499,26 +520,7 @@ embed_images_with_ids(PG_FUNCTION_ARGS)
     }
 
     funcctx = SRF_PERCALL_SETUP();
-    user_fctx *fctx = (user_fctx *)funcctx->user_fctx;
-
-    if (fctx->current < fctx->nitems)
-    {
-        Datum values[2];
-        bool nulls[2] = {false, false};
-        HeapTuple tuple;
-
-        values[0] = Int32GetDatum(fctx->ids[fctx->current]);
-        values[1] = PointerGetDatum(fctx->vectors[fctx->current]);
-
-        tuple = heap_form_tuple(funcctx->tuple_desc, values, nulls);
-        fctx->current++;
-
-        SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(tuple));
-    }
-    else
-    {
-        SRF_RETURN_DONE(funcctx);
-    }
+    return srf_return_next_embedding(funcctx, (EmbeddingSRFContext *)funcctx->user_fctx, fcinfo);
 }
 
 /* -------------------------------------------------------------------------
@@ -591,20 +593,8 @@ embed_multimodal(PG_FUNCTION_ARGS)
     if (c_texts)
         pfree(c_texts);
 
-    Datum *vectors = palloc(sizeof(Datum) * batch.n_vectors);
-    for (size_t i = 0; i < batch.n_vectors; i++)
-    {
-        Vector *v = make_vector_from_batch(&batch, i);
-        vectors[i] = PointerGetDatum(v);
-    }
-
-    ArrayType *result = construct_array(vectors, batch.n_vectors,
-                             TypenameGetTypid("vector"), -1, false, 'd');
-
+    ArrayType *result = construct_vector_array(&batch);
     free_embedding_batch(&batch);
-    for (size_t i = 0; i < batch.n_vectors; i++)
-        pfree(DatumGetPointer(vectors[i]));
-    pfree(vectors);
 
     PG_RETURN_ARRAYTYPE_P(result);
 }
