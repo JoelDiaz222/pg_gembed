@@ -1,0 +1,57 @@
+\set ON_ERROR_STOP on
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION pg_gembed;
+-- Basic text embedding
+SELECT vector_dims(embed_text('embed_anything', 'Qdrant/all-MiniLM-L6-v2-onnx', 'Hello world'));
+ vector_dims 
+-------------
+         384
+(1 row)
+
+-- Batch text embedding
+SELECT array_length(embed_texts('embed_anything', 'Qdrant/all-MiniLM-L6-v2-onnx', ARRAY['Hello', 'World']), 1);
+ array_length 
+--------------
+            2
+(1 row)
+
+-- Text embedding with IDs
+SELECT id, vector_dims(embedding) FROM embed_texts_with_ids('embed_anything', 'Qdrant/all-MiniLM-L6-v2-onnx', ARRAY[1, 2], ARRAY['Hello', 'World']);
+ id | vector_dims 
+----+-------------
+  1 |         384
+  2 |         384
+(2 rows)
+
+-- Image tests
+-- Note: Using absolute path as requested for this specific environment integration.
+-- Ideally, images should be in a location accessible to the postgres user relative to the test runner.
+\set image_path '/Users/joeldiaz/dev/pg_gembed/Geralt.jpg'
+-- Single image embedding
+SELECT vector_dims(embed_image('embed_anything', 'openai/clip-vit-base-patch32', pg_read_binary_file(:'image_path')));
+ vector_dims 
+-------------
+         512
+(1 row)
+
+-- Batch image embedding
+SELECT array_length(embed_images('embed_anything', 'openai/clip-vit-base-patch32', ARRAY[pg_read_binary_file(:'image_path')]), 1);
+ array_length 
+--------------
+            1
+(1 row)
+
+-- Image embedding with IDs
+SELECT id, vector_dims(embedding) FROM embed_images_with_ids('embed_anything', 'openai/clip-vit-base-patch32', ARRAY[1], ARRAY[pg_read_binary_file(:'image_path')]);
+ id | vector_dims 
+----+-------------
+  1 |         512
+(1 row)
+
+-- Multimodal embedding
+SELECT array_length(embed_multimodal('embed_anything', 'openai/clip-vit-base-patch32', ARRAY[pg_read_binary_file(:'image_path')], ARRAY['A cool image']), 1);
+ array_length 
+--------------
+            2
+(1 row)
+

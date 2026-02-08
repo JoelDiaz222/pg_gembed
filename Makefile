@@ -26,6 +26,8 @@ ifeq ($(UNAME_S),Darwin)
 	SHLIB_LINK += -undefined dynamic_lookup
 endif
 
+REGRESS = pg_gembed_test
+
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
 

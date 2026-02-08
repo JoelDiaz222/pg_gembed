@@ -16,3 +16,6 @@ server/__pycache__/
 *.obj
 *.lib
 *.exp
+results/
+regression.diffs
+regression.out
