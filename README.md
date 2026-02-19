@@ -43,17 +43,17 @@ CREATE EXTENSION pg_gembed;
 ### Basic Embedding Generation
 
 ```sql
-SELECT embed_text(
-    'fastembed',
-    'Qdrant/all-MiniLM-L6-v2-onnx',
-    'Hello world'
-);
+SELECT embed_image_directory(
+               'embed_anything',
+               'openai/clip-vit-base-patch32',
+               '/Users/joeldiaz/dev/pg_gembed/image'
+       );
 
 SELECT embed_texts(
-    'grpc',
-    'sentence-transformers/all-MiniLM-L6-v2',
-    ARRAY ['Hello world', 'Embedding in PostgreSQL']
-);
+               'grpc',
+               'sentence-transformers/all-MiniLM-L6-v2',
+               ARRAY ['Hello world', 'Embedding in PostgreSQL']
+       );
 ```
 
 Returns an array of `vector` types compatible with pgvector.
@@ -65,11 +65,11 @@ Returns an array of `vector` types compatible with pgvector.
 INSERT INTO documents (id, embedding)
 SELECT id, embedding
 FROM embed_texts_with_ids(
-    'fastembed',
-    'Qdrant/all-MiniLM-L6-v2-onnx',
-    ARRAY [1, 2, 3],
-    ARRAY ['First document', 'Second document', 'Third document']
-);
+        'fastembed',
+        'Qdrant/all-MiniLM-L6-v2-onnx',
+        ARRAY [1, 2, 3],
+        ARRAY ['First document', 'Second document', 'Third document']
+     );
 ```
 
 ## Zero-Shot Image Classification
@@ -78,32 +78,25 @@ FROM embed_texts_with_ids(
 
 ```sql
 SELECT embed_multimodal(
-    'grpc',
-    'ViT-B-32',
-    ARRAY[pg_read_binary_file('/path/to/image.jpg')],
-    ARRAY['A diagram', 'A photo']
-);
+               'grpc',
+               'ViT-B-32',
+               ARRAY [pg_read_binary_file('/path/to/image.jpg')],
+               ARRAY ['A diagram', 'A photo']
+       );
 ```
 
 ### Classification Example
 
 ```sql
-WITH inputs AS (
-    SELECT 
-        '/path/to/image.jpg' AS img_path,
-        ARRAY['Dog', 'Cat', 'Bird', 'Bat', 'Elephant'] AS labels
-),
-embeddings AS (
-    SELECT 
-        labels,
-        embed_multimodal('grpc', 'ViT-B-32', ARRAY[pg_read_binary_file(img_path)], labels) AS all_vecs
-    FROM inputs
-)
-SELECT 
-    labels[ordinality] AS predicted_label,
-    (all_vecs[1] <=> all_vecs[ordinality + 1]) AS distance
-FROM embeddings, 
-     UNNEST(labels) WITH ORDINALITY 
+WITH inputs AS (SELECT '/path/to/image.jpg'                            AS img_path,
+                       ARRAY ['Dog', 'Cat', 'Bird', 'Bat', 'Elephant'] AS labels),
+     embeddings AS (SELECT labels,
+                           embed_multimodal('grpc', 'ViT-B-32', ARRAY [pg_read_binary_file(img_path)],
+                                            labels) AS all_vecs
+                    FROM inputs)
+SELECT labels[ordinality]                         AS predicted_label,
+       (all_vecs[1] <=> all_vecs[ordinality + 1]) AS distance
+FROM embeddings, UNNEST(labels) WITH ORDINALITY
 ORDER BY distance ASC;
 ```
 
@@ -121,37 +114,29 @@ CREATE TABLE articles
 
 -- Generate embeddings during insert
 INSERT INTO articles (title, content, embedding)
-SELECT
-    title,
-    content,
-    (embed_texts(
-        'fastembed',
-        'Qdrant/all-MiniLM-L6-v2-onnx',
-        ARRAY[content]
-    ))[1]
-FROM (
-    VALUES
-        ('Understanding Transformers',
-         'Transformers have revolutionized NLP by using attention mechanisms.'),
-        ('Graph Neural Networks',
-         'GNNs operate on graph structures to capture relationships.'),
-        ('Reinforcement Learning Basics',
-         'An introduction to RL concepts like agents and environments.')
-) AS t(title, content);
+SELECT title,
+       content,
+       (embed_texts(
+               'fastembed',
+               'Qdrant/all-MiniLM-L6-v2-onnx',
+               ARRAY [content]
+        ))[1]
+FROM (VALUES ('Understanding Transformers',
+              'Transformers have revolutionized NLP by using attention mechanisms.'),
+             ('Graph Neural Networks',
+              'GNNs operate on graph structures to capture relationships.'),
+             ('Reinforcement Learning Basics',
+              'An introduction to RL concepts like agents and environments.')) AS t(title, content);
 
 -- Perform semantic search
-SELECT
-    id,
-    title,
-    content,
-    embedding <=> (
-        SELECT
-            (embed_texts(
-                'fastembed',
-                'Qdrant/all-MiniLM-L6-v2-onnx',
-                ARRAY['machine learning']
-            ))[1]
-    ) AS distance
+SELECT id,
+       title,
+       content,
+       embedding <=> (SELECT (embed_texts(
+               'fastembed',
+               'Qdrant/all-MiniLM-L6-v2-onnx',
+               ARRAY ['machine learning']
+                              ))[1]) AS distance
 FROM articles
 ORDER BY distance
 LIMIT 10;

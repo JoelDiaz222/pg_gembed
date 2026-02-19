@@ -33,8 +33,8 @@ CREATE OR REPLACE FUNCTION embed_texts_with_ids(
 )
     RETURNS TABLE
             (
-                id          integer,
-                embedding   vector
+                id        integer,
+                embedding vector
             )
 AS
 'MODULE_PATHNAME',
@@ -77,12 +77,38 @@ CREATE OR REPLACE FUNCTION embed_images_with_ids(
 )
     RETURNS TABLE
             (
-                id          integer,
-                embedding   vector
+                id        integer,
+                embedding vector
             )
 AS
 'MODULE_PATHNAME',
 'embed_images_with_ids'
+    LANGUAGE C
+    STRICT
+    PARALLEL SAFE;
+
+CREATE FUNCTION embed_image_directory(
+    embedder text,
+    model text,
+    path text
+)
+    RETURNS vector[]
+AS
+'MODULE_PATHNAME',
+'embed_image_directory'
+    LANGUAGE C
+    STRICT
+    PARALLEL SAFE;
+
+CREATE FUNCTION embed_image_directories(
+    embedder text,
+    model text,
+    paths text[]
+)
+    RETURNS vector[]
+AS
+'MODULE_PATHNAME',
+'embed_image_directories'
     LANGUAGE C
     STRICT
     PARALLEL SAFE;
@@ -120,6 +146,12 @@ COMMENT ON FUNCTION embed_images_with_ids(text, text, integer[], bytea[]) IS
 
 COMMENT ON FUNCTION embed_multimodal(text, text, bytea[], text[]) IS
     'Generate embeddings from multimodal inputs (images and/or text). At least one input must be provided.';
+
+COMMENT ON FUNCTION embed_image_directory(text, text, text) IS
+    'Generate embeddings for all images in a directory using the specified embedder and model';
+
+COMMENT ON FUNCTION embed_image_directories(text, text, text[]) IS
+    'Generate embeddings for all images in multiple directories using the specified embedder and model';
 
 -- Background worker schema and tables
 CREATE SCHEMA IF NOT EXISTS gembed;

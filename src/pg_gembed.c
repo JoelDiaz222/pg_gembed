@@ -135,6 +135,19 @@ make_multimodal_input(const StringSlice *texts, size_t n_texts,
 }
 
 /*
+ * Initialize InputData for image directory inputs
+ */
+static InputData
+make_image_directory_input(const StringSlice *paths, size_t n_paths)
+{
+    InputData d = {0};
+    d.input_type = INPUT_TYPE_IMAGE_DIRECTORY;
+    d.text_data = paths;
+    d.n_texts = n_paths;
+    return d;
+}
+
+/*
  * Generate embeddings using the specified embedder and model
  */
 static void
@@ -521,6 +534,71 @@ embed_images_with_ids(PG_FUNCTION_ARGS)
 
     funcctx = SRF_PERCALL_SETUP();
     return srf_return_next_embedding(funcctx, (EmbeddingSRFContext *)funcctx->user_fctx, fcinfo);
+}
+
+PG_FUNCTION_INFO_V1(embed_image_directory);
+
+Datum
+embed_image_directory(PG_FUNCTION_ARGS)
+{
+    text *embedder_text = PG_GETARG_TEXT_P(0);
+    text *model_text = PG_GETARG_TEXT_P(1);
+    text *path_text = PG_GETARG_TEXT_P(2);
+    int embedder_id, model_id;
+    EmbeddingBatch batch;
+
+    validate_embedder_and_model(embedder_text, model_text, INPUT_TYPE_IMAGE_DIRECTORY,
+                        &embedder_id, &model_id);
+
+    StringSlice c_input = text_to_string_slice(path_text);
+    InputData input_data = make_image_directory_input(&c_input, 1);
+
+    embed(embedder_id, model_id, &input_data, &batch);
+
+    ArrayType *result = construct_vector_array(&batch);
+    free_embedding_batch(&batch);
+
+    PG_RETURN_ARRAYTYPE_P(result);
+}
+
+PG_FUNCTION_INFO_V1(embed_image_directories);
+
+Datum
+embed_image_directories(PG_FUNCTION_ARGS)
+{
+    text *embedder_text = PG_GETARG_TEXT_P(0);
+    text *model_text = PG_GETARG_TEXT_P(1);
+    ArrayType *input_array = PG_GETARG_ARRAYTYPE_P(2);
+    Datum *path_elems;
+    bool *nulls;
+    int nitems;
+    int embedder_id, model_id;
+    EmbeddingBatch batch;
+
+    validate_embedder_and_model(embedder_text, model_text, INPUT_TYPE_IMAGE_DIRECTORY,
+                        &embedder_id, &model_id);
+
+    deconstruct_array(input_array, TEXTOID, -1, false, 'i',
+                      &path_elems, &nulls, &nitems);
+
+    if (nitems == 0)
+        PG_RETURN_NULL();
+
+    StringSlice *c_inputs = palloc(sizeof(StringSlice) * nitems);
+    for (int i = 0; i < nitems; i++)
+    {
+        text *t = DatumGetTextP(path_elems[i]);
+        c_inputs[i] = text_to_string_slice(t);
+    }
+
+    InputData input_data = make_image_directory_input(c_inputs, nitems);
+    embed(embedder_id, model_id, &input_data, &batch);
+    pfree(c_inputs);
+
+    ArrayType *result = construct_vector_array(&batch);
+    free_embedding_batch(&batch);
+
+    PG_RETURN_ARRAYTYPE_P(result);
 }
 
 /* -------------------------------------------------------------------------

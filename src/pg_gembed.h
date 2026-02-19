@@ -6,6 +6,7 @@
 #define INPUT_TYPE_TEXT 0
 #define INPUT_TYPE_IMAGE 1
 #define INPUT_TYPE_MULTIMODAL 2
+#define INPUT_TYPE_IMAGE_DIRECTORY 3
 
 /* Structure for storing generated embeddings */
 typedef struct
