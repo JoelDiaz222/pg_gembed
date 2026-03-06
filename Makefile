@@ -17,13 +17,20 @@ GEMBED_DIR = gembed
 GEMBED_TARGET = $(GEMBED_DIR)/target/release
 GEMBED_LIB = $(GEMBED_TARGET)/libgembed.a
 
+UNAME_S := $(shell uname -s)
+
 SHLIB_LINK = \
 	-L$(GEMBED_TARGET) \
 	-lgembed
 
-UNAME_S := $(shell uname -s)
+# macOS specific flags
 ifeq ($(UNAME_S),Darwin)
 	SHLIB_LINK += -undefined dynamic_lookup
+endif
+
+# Windows/MSYS/MINGW specific flags
+ifneq (,$(filter MINGW% MSYS%,$(UNAME_S)))
+	SHLIB_LINK += -lntdll
 endif
 
 REGRESS = pg_gembed_test
@@ -37,5 +44,5 @@ $(GEMBED_LIB):
 	cd $(GEMBED_DIR) && cargo build --release
 
 clean:
-	rm -f $(OBJS) $(MODULE_big).so $(MODULE_big).dylib
+	rm -f $(OBJS) $(MODULE_big).so $(MODULE_big).dylib $(MODULE_big).dll
 	cd $(GEMBED_DIR) && cargo clean

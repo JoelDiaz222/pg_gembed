@@ -43,14 +43,14 @@ CREATE EXTENSION pg_gembed;
 ### Basic Embedding Generation
 
 ```sql
-SELECT embed_image_directory(
+SELECT embed_text(
                'embed_anything',
-               'openai/clip-vit-base-patch32',
-               '/Users/joeldiaz/dev/pg_gembed/image'
+               'sentence-transformers/all-MiniLM-L6-v2',
+               'Hello world'
        );
 
 SELECT embed_texts(
-               'grpc',
+               'embed_anything',
                'sentence-transformers/all-MiniLM-L6-v2',
                ARRAY ['Hello world', 'Embedding in PostgreSQL']
        );
