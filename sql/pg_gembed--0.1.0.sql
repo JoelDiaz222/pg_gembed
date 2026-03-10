@@ -1,3 +1,13 @@
+-- Input type enum used by the polymorphic embed() dispatcher
+CREATE TYPE input_type AS ENUM (
+    'text',
+    'image',
+    'image_directory'
+);
+
+COMMENT ON TYPE input_type IS
+    'Discriminator for the polymorphic embed() function. Selects which typed embedding function is called.';
+
 -- Core embedding generation functions
 CREATE FUNCTION embed_text(
     embedder text,
@@ -196,3 +206,56 @@ SELECT j.job_id,
            ELSE 'disabled'
            END                                                            AS status
 FROM gembed.embedding_jobs j;
+
+-- Polymorphic dispatcher: routes to the appropriate typed embed function
+-- based on the input_type enum value.
+--
+-- Supported combinations:
+--   input_type 'text'            + text input   -> embed_text()
+--   input_type 'image'           + bytea input  -> embed_image()
+--   input_type 'image_directory' + text input   -> embed_image_directory()
+--
+-- For batch / multimodal use cases, call the corresponding typed functions
+-- (embed_texts, embed_images, embed_multimodal, ...) directly.
+CREATE FUNCTION embed(
+    embedder   text,
+    model      text,
+    input      anynonarray,
+    input_type input_type
+)
+    RETURNS vector
+AS
+'MODULE_PATHNAME',
+'embed_dispatch'
+    LANGUAGE C
+    STRICT
+    PARALLEL SAFE;
+
+COMMENT ON FUNCTION embed(text, text, anynonarray, input_type) IS
+    'Polymorphic embedding dispatcher (C). Pass a scalar text or bytea (or a '
+    'directory path) and the matching input_type to embed a single item. '
+    'For arrays use the anyarray overload.';
+
+-- Array overload: embed a batch of texts or images in one call.
+--
+-- Supported combinations:
+--   input_type 'text'            + text[]  input  -> embed_batch_text()
+--   input_type 'image'           + bytea[] input  -> embed_batch_image()
+--   input_type 'image_directory' + text[]  input  -> embed_batch_image_directory()
+CREATE FUNCTION embed(
+    embedder   text,
+    model      text,
+    input      anyarray,
+    input_type input_type
+)
+    RETURNS vector[]
+AS
+'MODULE_PATHNAME',
+'embed_dispatch_array'
+    LANGUAGE C
+    PARALLEL SAFE;
+
+COMMENT ON FUNCTION embed(text, text, anyarray, input_type) IS
+    'Polymorphic batch embedding dispatcher (C). Pass a text[], bytea[], or text[] '
+    '(directory paths) together with the matching input_type to embed a whole '
+    'array in one call. Returns NULL for an empty array.';

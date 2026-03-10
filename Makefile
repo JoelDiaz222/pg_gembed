@@ -1,5 +1,7 @@
 MODULE_big = pg_gembed
-OBJS = src/pg_gembed.o src/embedding_worker.o
+OBJS = src/pg_gembed.o \
+       src/internal.o \
+       src/embedding_worker.o
 
 EXTENSION = pg_gembed
 EXTVERSION = 0.1.0
