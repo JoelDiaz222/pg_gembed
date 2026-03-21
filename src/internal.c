@@ -5,18 +5,18 @@
  * ========================================================================= */
 
 void
-validate_embedder_and_model(text *embedder_text, text *model_text,
+validate_backend_and_model(text *backend_text, text *model_text,
                             int input_type,
-                            int *embedder_id, int *model_id)
+                            int *backend_id, int *model_id)
 {
-    char *embedder_str = text_to_cstring(embedder_text);
+    char *backend_str = text_to_cstring(backend_text);
     char *model_str    = text_to_cstring(model_text);
 
-    *embedder_id = validate_embedder(embedder_str);
-    if (*embedder_id < 0)
-        elog(ERROR, "Invalid embedder: %s", embedder_str);
+    *backend_id = validate_backend(backend_str);
+    if (*backend_id < 0)
+        elog(ERROR, "Invalid backend: %s", backend_str);
 
-    *model_id = validate_embedding_model(*embedder_id, model_str, input_type);
+    *model_id = validate_model(*backend_id, model_str, input_type);
     if (*model_id < 0)
         elog(ERROR, "Model not allowed: %s", model_str);
 }
@@ -95,10 +95,10 @@ make_image_directory_input(const StringSlice *paths, size_t n_paths)
  * ========================================================================= */
 
 void
-embed(int embedder_id, int model_id, const InputData *input,
+embed(int backend_id, int model_id, const InputData *input,
       EmbeddingBatch *batch)
 {
-    int err = generate_embeddings(embedder_id, model_id, input, batch);
+    int err = generate_embeddings(backend_id, model_id, input, batch);
     if (err < 0)
     {
         free_embedding_batch(batch);
@@ -209,18 +209,18 @@ resolve_input_type_label(Oid enum_oid)
  * ========================================================================= */
 
 Vector *
-embed_one_text(text *embedder_text, text *model_text, text *input_text)
+embed_one_text(text *backend_text, text *model_text, text *input_text)
 {
-    int            embedder_id, model_id;
+    int            backend_id, model_id;
     EmbeddingBatch batch;
 
-    validate_embedder_and_model(embedder_text, model_text, INPUT_TYPE_TEXT,
-                                &embedder_id, &model_id);
+    validate_backend_and_model(backend_text, model_text, INPUT_TYPE_TEXT,
+                                &backend_id, &model_id);
 
     StringSlice c_input    = text_to_string_slice(input_text);
     InputData   input_data = make_text_input(&c_input, 1);
 
-    embed(embedder_id, model_id, &input_data, &batch);
+    embed(backend_id, model_id, &input_data, &batch);
 
     if (batch.n_vectors != 1)
     {
@@ -234,18 +234,18 @@ embed_one_text(text *embedder_text, text *model_text, text *input_text)
 }
 
 Vector *
-embed_one_image(text *embedder_text, text *model_text, bytea *input_bytea)
+embed_one_image(text *backend_text, text *model_text, bytea *input_bytea)
 {
-    int            embedder_id, model_id;
+    int            backend_id, model_id;
     EmbeddingBatch batch;
 
-    validate_embedder_and_model(embedder_text, model_text, INPUT_TYPE_IMAGE,
-                                &embedder_id, &model_id);
+    validate_backend_and_model(backend_text, model_text, INPUT_TYPE_IMAGE,
+                                &backend_id, &model_id);
 
     ByteSlice c_input    = bytea_to_byte_slice(input_bytea);
     InputData input_data = make_image_input(&c_input, 1);
 
-    embed(embedder_id, model_id, &input_data, &batch);
+    embed(backend_id, model_id, &input_data, &batch);
 
     if (batch.n_vectors != 1)
     {
@@ -259,18 +259,18 @@ embed_one_image(text *embedder_text, text *model_text, bytea *input_bytea)
 }
 
 ArrayType *
-embed_one_image_directory(text *embedder_text, text *model_text, text *path_text)
+embed_one_image_directory(text *backend_text, text *model_text, text *path_text)
 {
-    int            embedder_id, model_id;
+    int            backend_id, model_id;
     EmbeddingBatch batch;
 
-    validate_embedder_and_model(embedder_text, model_text, INPUT_TYPE_IMAGE_DIRECTORY,
-                                &embedder_id, &model_id);
+    validate_backend_and_model(backend_text, model_text, INPUT_TYPE_IMAGE_DIRECTORY,
+                                &backend_id, &model_id);
 
     StringSlice c_input    = text_to_string_slice(path_text);
     InputData   input_data = make_image_directory_input(&c_input, 1);
 
-    embed(embedder_id, model_id, &input_data, &batch);
+    embed(backend_id, model_id, &input_data, &batch);
 
     ArrayType *result = construct_vector_array(&batch);
     free_embedding_batch(&batch);
@@ -282,16 +282,16 @@ embed_one_image_directory(text *embedder_text, text *model_text, text *path_text
  * ========================================================================= */
 
 ArrayType *
-embed_batch_text(text *embedder_text, text *model_text, ArrayType *input_array)
+embed_batch_text(text *backend_text, text *model_text, ArrayType *input_array)
 {
-    int            embedder_id, model_id;
+    int            backend_id, model_id;
     EmbeddingBatch batch;
     Datum         *text_elems;
     bool          *nulls;
     int            nitems;
 
-    validate_embedder_and_model(embedder_text, model_text, INPUT_TYPE_TEXT,
-                                &embedder_id, &model_id);
+    validate_backend_and_model(backend_text, model_text, INPUT_TYPE_TEXT,
+                                &backend_id, &model_id);
 
     deconstruct_array(input_array, TEXTOID, -1, false, 'i',
                       &text_elems, &nulls, &nitems);
@@ -304,7 +304,7 @@ embed_batch_text(text *embedder_text, text *model_text, ArrayType *input_array)
         c_inputs[i] = text_to_string_slice(DatumGetTextP(text_elems[i]));
 
     InputData input_data = make_text_input(c_inputs, nitems);
-    embed(embedder_id, model_id, &input_data, &batch);
+    embed(backend_id, model_id, &input_data, &batch);
     pfree(c_inputs);
 
     ArrayType *result = construct_vector_array(&batch);
@@ -313,16 +313,16 @@ embed_batch_text(text *embedder_text, text *model_text, ArrayType *input_array)
 }
 
 ArrayType *
-embed_batch_image(text *embedder_text, text *model_text, ArrayType *input_array)
+embed_batch_image(text *backend_text, text *model_text, ArrayType *input_array)
 {
-    int            embedder_id, model_id;
+    int            backend_id, model_id;
     EmbeddingBatch batch;
     Datum         *bytea_elems;
     bool          *nulls;
     int            nitems;
 
-    validate_embedder_and_model(embedder_text, model_text, INPUT_TYPE_IMAGE,
-                                &embedder_id, &model_id);
+    validate_backend_and_model(backend_text, model_text, INPUT_TYPE_IMAGE,
+                                &backend_id, &model_id);
 
     deconstruct_array(input_array, BYTEAOID, -1, false, 'i',
                       &bytea_elems, &nulls, &nitems);
@@ -335,7 +335,7 @@ embed_batch_image(text *embedder_text, text *model_text, ArrayType *input_array)
         c_inputs[i] = bytea_to_byte_slice(DatumGetByteaP(bytea_elems[i]));
 
     InputData input_data = make_image_input(c_inputs, nitems);
-    embed(embedder_id, model_id, &input_data, &batch);
+    embed(backend_id, model_id, &input_data, &batch);
     pfree(c_inputs);
 
     ArrayType *result = construct_vector_array(&batch);
@@ -344,17 +344,17 @@ embed_batch_image(text *embedder_text, text *model_text, ArrayType *input_array)
 }
 
 ArrayType *
-embed_batch_image_directory(text *embedder_text, text *model_text,
+embed_batch_image_directory(text *backend_text, text *model_text,
                             ArrayType *input_array)
 {
-    int            embedder_id, model_id;
+    int            backend_id, model_id;
     EmbeddingBatch batch;
     Datum         *path_elems;
     bool          *nulls;
     int            nitems;
 
-    validate_embedder_and_model(embedder_text, model_text, INPUT_TYPE_IMAGE_DIRECTORY,
-                                &embedder_id, &model_id);
+    validate_backend_and_model(backend_text, model_text, INPUT_TYPE_IMAGE_DIRECTORY,
+                                &backend_id, &model_id);
 
     deconstruct_array(input_array, TEXTOID, -1, false, 'i',
                       &path_elems, &nulls, &nitems);
@@ -367,7 +367,7 @@ embed_batch_image_directory(text *embedder_text, text *model_text,
         c_inputs[i] = text_to_string_slice(DatumGetTextP(path_elems[i]));
 
     InputData input_data = make_image_directory_input(c_inputs, nitems);
-    embed(embedder_id, model_id, &input_data, &batch);
+    embed(backend_id, model_id, &input_data, &batch);
     pfree(c_inputs);
 
     ArrayType *result = construct_vector_array(&batch);
@@ -382,7 +382,7 @@ embed_batch_image_directory(text *embedder_text, text *model_text,
 Datum
 embed_texts_with_ids_impl(FunctionCallInfo fcinfo)
 {
-    text      *embedder_text = PG_GETARG_TEXT_P(0);
+    text      *backend_text = PG_GETARG_TEXT_P(0);
     text      *model_text    = PG_GETARG_TEXT_P(1);
     ArrayType *ids_array     = PG_GETARG_ARRAYTYPE_P(2);
     ArrayType *texts_array   = PG_GETARG_ARRAYTYPE_P(3);
@@ -396,7 +396,7 @@ embed_texts_with_ids_impl(FunctionCallInfo fcinfo)
     if (SRF_IS_FIRSTCALL())
     {
         MemoryContext   oldcontext;
-        int             embedder_id, model_id;
+        int             backend_id, model_id;
         EmbeddingBatch  batch;
         StringSlice    *c_inputs;
         int            *c_ids;
@@ -404,8 +404,8 @@ embed_texts_with_ids_impl(FunctionCallInfo fcinfo)
         funcctx    = SRF_FIRSTCALL_INIT();
         oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
-        validate_embedder_and_model(embedder_text, model_text, INPUT_TYPE_TEXT,
-                                    &embedder_id, &model_id);
+        validate_backend_and_model(backend_text, model_text, INPUT_TYPE_TEXT,
+                                    &backend_id, &model_id);
 
         deconstruct_array(ids_array, INT4OID, 4, true, 'i',
                           &id_elems, &id_nulls, &n_ids);
@@ -427,7 +427,7 @@ embed_texts_with_ids_impl(FunctionCallInfo fcinfo)
         }
 
         InputData input_data = make_text_input(c_inputs, n_texts);
-        embed(embedder_id, model_id, &input_data, &batch);
+        embed(backend_id, model_id, &input_data, &batch);
         pfree(c_inputs);
 
         Datum *vectors;
@@ -461,7 +461,7 @@ embed_texts_with_ids_impl(FunctionCallInfo fcinfo)
 Datum
 embed_images_with_ids_impl(FunctionCallInfo fcinfo)
 {
-    text      *embedder_text = PG_GETARG_TEXT_P(0);
+    text      *backend_text = PG_GETARG_TEXT_P(0);
     text      *model_text    = PG_GETARG_TEXT_P(1);
     ArrayType *ids_array     = PG_GETARG_ARRAYTYPE_P(2);
     ArrayType *images_array  = PG_GETARG_ARRAYTYPE_P(3);
@@ -475,7 +475,7 @@ embed_images_with_ids_impl(FunctionCallInfo fcinfo)
     if (SRF_IS_FIRSTCALL())
     {
         MemoryContext  oldcontext;
-        int            embedder_id, model_id;
+        int            backend_id, model_id;
         EmbeddingBatch batch;
         ByteSlice     *c_inputs;
         int           *c_ids;
@@ -483,8 +483,8 @@ embed_images_with_ids_impl(FunctionCallInfo fcinfo)
         funcctx    = SRF_FIRSTCALL_INIT();
         oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
-        validate_embedder_and_model(embedder_text, model_text, INPUT_TYPE_IMAGE,
-                                    &embedder_id, &model_id);
+        validate_backend_and_model(backend_text, model_text, INPUT_TYPE_IMAGE,
+                                    &backend_id, &model_id);
 
         deconstruct_array(ids_array, INT4OID, 4, true, 'i',
                           &id_elems, &id_nulls, &n_ids);
@@ -506,7 +506,7 @@ embed_images_with_ids_impl(FunctionCallInfo fcinfo)
         }
 
         InputData input_data = make_image_input(c_inputs, n_images);
-        embed(embedder_id, model_id, &input_data, &batch);
+        embed(backend_id, model_id, &input_data, &batch);
         pfree(c_inputs);
 
         Datum *vectors;
@@ -544,16 +544,16 @@ embed_images_with_ids_impl(FunctionCallInfo fcinfo)
 Datum
 embed_multimodal_impl(FunctionCallInfo fcinfo)
 {
-    text      *embedder_text = PG_GETARG_TEXT_P(0);
+    text      *backend_text = PG_GETARG_TEXT_P(0);
     text      *model_text    = PG_GETARG_TEXT_P(1);
     ArrayType *images_array  = PG_ARGISNULL(2) ? NULL : PG_GETARG_ARRAYTYPE_P(2);
     ArrayType *text_array    = PG_ARGISNULL(3) ? NULL : PG_GETARG_ARRAYTYPE_P(3);
 
-    int            embedder_id, model_id;
+    int            backend_id, model_id;
     EmbeddingBatch batch;
 
-    validate_embedder_and_model(embedder_text, model_text, INPUT_TYPE_MULTIMODAL,
-                                &embedder_id, &model_id);
+    validate_backend_and_model(backend_text, model_text, INPUT_TYPE_MULTIMODAL,
+                                &backend_id, &model_id);
 
     ByteSlice *c_images = NULL;
     int        n_images = 0;
@@ -591,7 +591,7 @@ embed_multimodal_impl(FunctionCallInfo fcinfo)
         elog(ERROR, "At least one of images or texts must be provided");
 
     InputData input_data = make_multimodal_input(c_texts, n_texts, c_images, n_images);
-    embed(embedder_id, model_id, &input_data, &batch);
+    embed(backend_id, model_id, &input_data, &batch);
 
     if (c_images) pfree(c_images);
     if (c_texts)  pfree(c_texts);
@@ -609,7 +609,7 @@ embed_multimodal_impl(FunctionCallInfo fcinfo)
 Datum
 embed_dispatch_impl(FunctionCallInfo fcinfo)
 {
-    text  *embedder_text = PG_GETARG_TEXT_P(0);
+    text  *backend_text = PG_GETARG_TEXT_P(0);
     text  *model_text    = PG_GETARG_TEXT_P(1);
     Datum  input_datum   = PG_GETARG_DATUM(2);
     Oid    enum_oid      = PG_GETARG_OID(3);
@@ -625,7 +625,7 @@ embed_dispatch_impl(FunctionCallInfo fcinfo)
                      errmsg("embed(): input_type 'text' requires a text argument, "
                             "got type OID %u", input_typeid)));
 
-        PG_RETURN_POINTER(embed_one_text(embedder_text, model_text,
+        PG_RETURN_POINTER(embed_one_text(backend_text, model_text,
                                         DatumGetTextP(input_datum)));
     }
     else if (strcmp(label, "image") == 0)
@@ -636,12 +636,12 @@ embed_dispatch_impl(FunctionCallInfo fcinfo)
                      errmsg("embed(): input_type 'image' requires a bytea argument, "
                             "got type OID %u", input_typeid)));
 
-        PG_RETURN_POINTER(embed_one_image(embedder_text, model_text,
+        PG_RETURN_POINTER(embed_one_image(backend_text, model_text,
                                          DatumGetByteaP(input_datum)));
     }
     else if (strcmp(label, "image_directory") == 0)
     {
-        int            embedder_id, model_id;
+        int            backend_id, model_id;
         EmbeddingBatch batch;
 
         if (input_typeid != TEXTOID)
@@ -650,13 +650,13 @@ embed_dispatch_impl(FunctionCallInfo fcinfo)
                      errmsg("embed(): input_type 'image_directory' requires a text "
                             "(path) argument, got type OID %u", input_typeid)));
 
-        validate_embedder_and_model(embedder_text, model_text, INPUT_TYPE_IMAGE_DIRECTORY,
-                                    &embedder_id, &model_id);
+        validate_backend_and_model(backend_text, model_text, INPUT_TYPE_IMAGE_DIRECTORY,
+                                    &backend_id, &model_id);
 
         StringSlice c_input    = text_to_string_slice(DatumGetTextP(input_datum));
         InputData   input_data = make_image_directory_input(&c_input, 1);
 
-        embed(embedder_id, model_id, &input_data, &batch);
+        embed(backend_id, model_id, &input_data, &batch);
 
         if (batch.n_vectors < 1)
         {
@@ -677,7 +677,7 @@ embed_dispatch_impl(FunctionCallInfo fcinfo)
 Datum
 embed_dispatch_array_impl(FunctionCallInfo fcinfo)
 {
-    text      *embedder_text = PG_GETARG_TEXT_P(0);
+    text      *backend_text = PG_GETARG_TEXT_P(0);
     text      *model_text    = PG_GETARG_TEXT_P(1);
     ArrayType *input_array   = PG_GETARG_ARRAYTYPE_P(2);
     Oid        enum_oid      = PG_GETARG_OID(3);
@@ -699,7 +699,7 @@ embed_dispatch_array_impl(FunctionCallInfo fcinfo)
                      errmsg("embed(): input_type 'text' requires a text[] argument, "
                             "got element type OID %u", elem_typeid)));
 
-        result = embed_batch_text(embedder_text, model_text, input_array);
+        result = embed_batch_text(backend_text, model_text, input_array);
     }
     else if (strcmp(label, "image") == 0)
     {
@@ -709,7 +709,7 @@ embed_dispatch_array_impl(FunctionCallInfo fcinfo)
                      errmsg("embed(): input_type 'image' requires a bytea[] argument, "
                             "got element type OID %u", elem_typeid)));
 
-        result = embed_batch_image(embedder_text, model_text, input_array);
+        result = embed_batch_image(backend_text, model_text, input_array);
     }
     else if (strcmp(label, "image_directory") == 0)
     {
@@ -719,7 +719,7 @@ embed_dispatch_array_impl(FunctionCallInfo fcinfo)
                      errmsg("embed(): input_type 'image_directory' requires a text[] "
                             "(paths) argument, got element type OID %u", elem_typeid)));
 
-        result = embed_batch_image_directory(embedder_text, model_text, input_array);
+        result = embed_batch_image_directory(backend_text, model_text, input_array);
     }
     else
     {

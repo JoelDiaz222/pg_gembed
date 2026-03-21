@@ -10,7 +10,7 @@ COMMENT ON TYPE input_type IS
 
 -- Core embedding generation functions
 CREATE FUNCTION embed_text(
-    embedder text,
+    backend text,
     model text,
     input text
 )
@@ -23,7 +23,7 @@ AS
     PARALLEL SAFE;
 
 CREATE FUNCTION embed_texts(
-    embedder text,
+    backend text,
     model text,
     texts text[]
 )
@@ -36,7 +36,7 @@ AS
     PARALLEL SAFE;
 
 CREATE OR REPLACE FUNCTION embed_texts_with_ids(
-    embedder text,
+    backend text,
     model text,
     ids integer[],
     texts text[]
@@ -54,7 +54,7 @@ AS
     PARALLEL SAFE;
 
 CREATE FUNCTION embed_image(
-    embedder text,
+    backend text,
     model text,
     input bytea
 )
@@ -67,7 +67,7 @@ AS
     PARALLEL SAFE;
 
 CREATE FUNCTION embed_images(
-    embedder text,
+    backend text,
     model text,
     images bytea[]
 )
@@ -80,7 +80,7 @@ AS
     PARALLEL SAFE;
 
 CREATE OR REPLACE FUNCTION embed_images_with_ids(
-    embedder text,
+    backend text,
     model text,
     ids integer[],
     images bytea[]
@@ -98,7 +98,7 @@ AS
     PARALLEL SAFE;
 
 CREATE FUNCTION embed_image_directory(
-    embedder text,
+    backend text,
     model text,
     path text
 )
@@ -111,7 +111,7 @@ AS
     PARALLEL SAFE;
 
 CREATE FUNCTION embed_image_directories(
-    embedder text,
+    backend text,
     model text,
     paths text[]
 )
@@ -124,7 +124,7 @@ AS
     PARALLEL SAFE;
 
 CREATE FUNCTION embed_multimodal(
-    embedder text,
+    backend text,
     model text,
     images bytea[] DEFAULT NULL,
     texts text[] DEFAULT NULL
@@ -137,19 +137,19 @@ AS
     PARALLEL SAFE;
 
 COMMENT ON FUNCTION embed_texts(text, text, text[]) IS
-    'Generate embeddings for an array of text inputs using the specified embedder and model';
+    'Generate embeddings for an array of text inputs using the specified backend and model';
 
 COMMENT ON FUNCTION embed_text(text, text, text) IS
-    'Generate an embedding for a single text input using the specified embedder and model';
+    'Generate an embedding for a single text input using the specified backend and model';
 
 COMMENT ON FUNCTION embed_texts_with_ids(text, text, integer[], text[]) IS
     'Generate embeddings with associated IDs, returning a table of (id, embedding) pairs';
 
 COMMENT ON FUNCTION embed_image(text, text, bytea) IS
-    'Generate an embedding for a single image input using the specified embedder and model';
+    'Generate an embedding for a single image input using the specified backend and model';
 
 COMMENT ON FUNCTION embed_images(text, text, bytea[]) IS
-    'Generate embeddings for an array of image inputs using the specified embedder and model';
+    'Generate embeddings for an array of image inputs using the specified backend and model';
 
 COMMENT ON FUNCTION embed_images_with_ids(text, text, integer[], bytea[]) IS
     'Generate embeddings for images with associated IDs, returning a table of (id, embedding) pairs';
@@ -158,10 +158,10 @@ COMMENT ON FUNCTION embed_multimodal(text, text, bytea[], text[]) IS
     'Generate embeddings from multimodal inputs (images and/or text). At least one input must be provided.';
 
 COMMENT ON FUNCTION embed_image_directory(text, text, text) IS
-    'Generate embeddings for all images in a directory using the specified embedder and model';
+    'Generate embeddings for all images in a directory using the specified backend and model';
 
 COMMENT ON FUNCTION embed_image_directories(text, text, text[]) IS
-    'Generate embeddings for all images in multiple directories using the specified embedder and model';
+    'Generate embeddings for all images in multiple directories using the specified backend and model';
 
 -- Background worker schema and tables
 CREATE SCHEMA IF NOT EXISTS gembed;
@@ -176,7 +176,7 @@ CREATE TABLE gembed.embedding_jobs
     target_schema     TEXT      DEFAULT 'public',
     target_table      TEXT NOT NULL,
     target_column     TEXT NOT NULL,
-    embedder          TEXT NOT NULL,
+    backend           TEXT NOT NULL,
     model             TEXT NOT NULL,
     enabled           BOOLEAN   DEFAULT true,
     last_processed_id INTEGER   DEFAULT 0,
@@ -193,7 +193,7 @@ CREATE VIEW gembed.job_status AS
 SELECT j.job_id,
        j.source_schema || '.' || j.source_table || '.' || j.source_column AS source,
        j.target_schema || '.' || j.target_table || '.' || j.target_column AS target,
-       j.embedder,
+       j.backend,
        j.model,
        j.enabled,
        j.last_processed_id,
@@ -218,10 +218,10 @@ FROM gembed.embedding_jobs j;
 -- For batch / multimodal use cases, call the corresponding typed functions
 -- (embed_texts, embed_images, embed_multimodal, ...) directly.
 CREATE FUNCTION embed(
-    embedder   text,
-    model      text,
-    input      anynonarray,
-    input_type input_type
+    backend_name text,
+    model_name text,
+    input anynonarray,
+    type input_type
 )
     RETURNS vector
 AS
@@ -243,10 +243,10 @@ COMMENT ON FUNCTION embed(text, text, anynonarray, input_type) IS
 --   input_type 'image'           + bytea[] input  -> embed_batch_image()
 --   input_type 'image_directory' + text[]  input  -> embed_batch_image_directory()
 CREATE FUNCTION embed(
-    embedder   text,
-    model      text,
-    input      anyarray,
-    input_type input_type
+    backend_name text,
+    model_name text,
+    input anyarray,
+    type input_type
 )
     RETURNS vector[]
 AS

@@ -30,7 +30,7 @@ typedef struct EmbeddingJob
     char *target_schema;
     char *target_table;
     char *target_column;
-    char *embedder;
+    char *backend;
     char *model;
 } EmbeddingJob;
 

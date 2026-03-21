@@ -40,15 +40,15 @@ typedef struct
     size_t n_texts;                     /* Number of text items */
 } InputData;
 
-/* Validates the embedder name and returns its ID (-1 if non-existent) */
-extern int validate_embedder(const char *name);
+/* Validates the backend name and returns its ID (-1 if non-existent) */
+extern int validate_backend(const char *name);
 
-/* Validates the model name for a given embedder and returns model ID */
-extern int validate_embedding_model(int embedder_id, const char *model, int input_type);
+/* Validates the model name for a given backend and returns model ID */
+extern int validate_model(int backend_id, const char *model, int input_type);
 
 /* Generates embeddings for the given input data */
 extern int generate_embeddings(
-    int embedder_id,
+    int backend_id,
     int model_id,
     const InputData *input_data,
     EmbeddingBatch *out_batch

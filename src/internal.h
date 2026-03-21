@@ -31,9 +31,9 @@ typedef struct
  * Low-level helpers
  * -------------------------------------------------------------------------
  */
-void        validate_embedder_and_model(text *embedder_text, text *model_text,
+void        validate_backend_and_model(text *backend_text, text *model_text,
                                         int input_type,
-                                        int *embedder_id, int *model_id);
+                                        int *backend_id, int *model_id);
 
 StringSlice text_to_string_slice(text *t);
 ByteSlice   bytea_to_byte_slice(bytea *b);
@@ -44,7 +44,7 @@ InputData   make_multimodal_input(const StringSlice *texts, size_t n_texts,
                                   const ByteSlice *images, size_t n_images);
 InputData   make_image_directory_input(const StringSlice *paths, size_t n_paths);
 
-void        embed(int embedder_id, int model_id, const InputData *input,
+void        embed(int backend_id, int model_id, const InputData *input,
                   EmbeddingBatch *batch);
 
 Vector     *make_vector_from_batch(const EmbeddingBatch *batch, size_t index);
@@ -63,22 +63,22 @@ char       *resolve_input_type_label(Oid enum_oid);
  * Single-item helpers
  * -------------------------------------------------------------------------
  */
-Vector    *embed_one_text(text *embedder_text, text *model_text,
+Vector    *embed_one_text(text *backend_text, text *model_text,
                           text *input_text);
-Vector    *embed_one_image(text *embedder_text, text *model_text,
+Vector    *embed_one_image(text *backend_text, text *model_text,
                            bytea *input_bytea);
-ArrayType *embed_one_image_directory(text *embedder_text, text *model_text,
+ArrayType *embed_one_image_directory(text *backend_text, text *model_text,
                                      text *path_text);
 
 /* -------------------------------------------------------------------------
  * Batch helpers  (return NULL for an empty input array)
  * -------------------------------------------------------------------------
  */
-ArrayType *embed_batch_text(text *embedder_text, text *model_text,
+ArrayType *embed_batch_text(text *backend_text, text *model_text,
                             ArrayType *input_array);
-ArrayType *embed_batch_image(text *embedder_text, text *model_text,
+ArrayType *embed_batch_image(text *backend_text, text *model_text,
                              ArrayType *input_array);
-ArrayType *embed_batch_image_directory(text *embedder_text, text *model_text,
+ArrayType *embed_batch_image_directory(text *backend_text, text *model_text,
                                        ArrayType *input_array);
 
 /* -------------------------------------------------------------------------
