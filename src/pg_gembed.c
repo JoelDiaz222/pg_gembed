@@ -1,4 +1,5 @@
 #include "internal.h"
+#include "telemetry.h"
 
 PG_MODULE_MAGIC;
 
@@ -19,9 +20,11 @@ PG_FUNCTION_INFO_V1(embed_texts);
 Datum
 embed_texts(PG_FUNCTION_ARGS)
 {
+    TELEMETRY_LOG("c_ext_entry_embed_texts", 0);
     ArrayType *result = embed_batch_text(PG_GETARG_TEXT_P(0),
                                          PG_GETARG_TEXT_P(1),
                                          PG_GETARG_ARRAYTYPE_P(2));
+    TELEMETRY_LOG("c_ext_exit_embed_texts", 0);
     if (result == NULL) PG_RETURN_NULL();
     PG_RETURN_ARRAYTYPE_P(result);
 }

@@ -1,4 +1,5 @@
 #include "internal.h"
+#include "telemetry.h"
 
 /* =========================================================================
  * Embedder & Model validation
@@ -12,13 +13,17 @@ validate_backend_and_model(text *backend_text, text *model_text,
     char *backend_str = text_to_cstring(backend_text);
     char *model_str    = text_to_cstring(model_text);
 
+    TELEMETRY_LOG("c_validate_backend_start", 0);
     *backend_id = validate_backend(backend_str);
     if (*backend_id < 0)
         elog(ERROR, "Invalid backend: %s", backend_str);
+    TELEMETRY_LOG("c_validate_backend_done", 0);
 
+    TELEMETRY_LOG("c_validate_model_start", 0);
     *model_id = validate_model(*backend_id, model_str, input_type);
     if (*model_id < 0)
         elog(ERROR, "Model not allowed: %s", model_str);
+    TELEMETRY_LOG("c_validate_model_done", 0);
 }
 
 /* =========================================================================
@@ -98,7 +103,13 @@ void
 embed(int backend_id, int model_id, const InputData *input,
       EmbeddingBatch *batch)
 {
+    int batch_size = (int)(input->input_type == INPUT_TYPE_TEXT
+                         ? input->n_texts : input->n_binaries);
+
+    TELEMETRY_LOG("c_pre_ffi", batch_size);
     int err = generate_embeddings(backend_id, model_id, input, batch);
+    TELEMETRY_LOG("c_post_ffi", batch_size);
+
     if (err < 0)
     {
         free_embedding_batch(batch);
@@ -290,6 +301,7 @@ embed_batch_text(text *backend_text, text *model_text, ArrayType *input_array)
     bool          *nulls;
     int            nitems;
 
+    TELEMETRY_LOG("c_embed_batch_text_entry", 0);
     validate_backend_and_model(backend_text, model_text, INPUT_TYPE_TEXT,
                                 &backend_id, &model_id);
 
@@ -303,12 +315,14 @@ embed_batch_text(text *backend_text, text *model_text, ArrayType *input_array)
     for (int i = 0; i < nitems; i++)
         c_inputs[i] = text_to_string_slice(DatumGetTextP(text_elems[i]));
 
+    TELEMETRY_LOG("c_embed_batch_text_pre_embed", nitems);
     InputData input_data = make_text_input(c_inputs, nitems);
     embed(backend_id, model_id, &input_data, &batch);
     pfree(c_inputs);
 
     ArrayType *result = construct_vector_array(&batch);
     free_embedding_batch(&batch);
+    TELEMETRY_LOG("c_embed_batch_text_done", nitems);
     return result;
 }
 
