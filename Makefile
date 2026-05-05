@@ -4,7 +4,7 @@ OBJS = src/pg_gembed.o \
        src/embedding_worker.o
 
 EXTENSION = pg_gembed
-EXTVERSION = 0.1.0
+EXTVERSION = 1.0.0
 DATA = sql/$(EXTENSION)--$(EXTVERSION).sql
 
 PG_CONFIG = pg_config

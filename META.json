@@ -1,0 +1,47 @@
+{
+  "name": "pg_gembed",
+  "abstract": "Generate embeddings inside PostgreSQL",
+  "description": "A PostgreSQL extension for generating embeddings in-database using a Rust inference core.",
+  "version": "1.0.0",
+  "maintainer": [
+    "Joel Diaz <joeldiazgamer999@gmail.com>"
+  ],
+  "license": "apache_2_0",
+  "release_status": "stable",
+  "provides": {
+    "pg_gembed": {
+      "file": "sql/pg_gembed--1.0.0.sql",
+      "docfile": "README.md",
+      "version": "1.0.0",
+      "abstract": "Generate embeddings inside PostgreSQL"
+    }
+  },
+  "prereqs": {
+    "runtime": {
+      "requires": {
+        "PostgreSQL": "18.1.0",
+        "vector": "0.8.2"
+      }
+    }
+  },
+  "resources": {
+    "repository": {
+      "url": "git://github.com/JoelDiaz222/pg_gembed.git",
+      "web": "https://github.com/JoelDiaz222/pg_gembed",
+      "type": "git"
+    },
+    "bugtracker": {
+      "web": "https://github.com/JoelDiaz222/pg_gembed/issues"
+    }
+  },
+  "tags": [
+    "embeddings",
+    "vector",
+    "machine-learning",
+    "ai"
+  ],
+  "meta-spec": {
+    "version": "1.0.0",
+    "url": "https://pgxn.org/meta/spec.txt"
+  }
+}
